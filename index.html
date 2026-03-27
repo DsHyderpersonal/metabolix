@@ -1,0 +1,1937 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>METABOLIX — Tracker Calorico</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --surface3: #22223a;
+    --accent: #c8f04d;
+    --accent2: #4df0c8;
+    --accent3: #f04d7a;
+    --accent4: #f0a44d;
+    --text: #f0f0f8;
+    --text2: #8888aa;
+    --text3: #55556a;
+    --border: #2a2a3f;
+    --radius: 16px;
+    --radius-sm: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* NOISE TEXTURE */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* HEADER */
+  .header {
+    padding: 24px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(20px);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
+
+  .logo span { color: var(--text); }
+
+  .date-display {
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* NAV TABS */
+  .nav {
+    display: flex;
+    gap: 2px;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    overflow-x: auto;
+  }
+
+  .nav-tab {
+    padding: 8px 20px;
+    border-radius: 100px;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .nav-tab.active {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .nav-tab:hover:not(.active) {
+    background: var(--surface3);
+    color: var(--text);
+  }
+
+  /* MAIN */
+  .main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    transition: border-color 0.2s;
+  }
+
+  .card:hover { border-color: var(--surface3); }
+
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 16px;
+  }
+
+  /* GRID */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+  @media (max-width: 900px) {
+    .grid-4 { grid-template-columns: 1fr 1fr; }
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+  }
+
+  @media (max-width: 600px) {
+    .main { padding: 16px; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .nav { padding: 12px 16px; }
+    .header { padding: 16px; }
+  }
+
+  /* STAT CHIPS */
+  .stat-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .stat-chip .label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text2);
+  }
+
+  .stat-chip .value {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-chip .value.accent { color: var(--accent); }
+  .stat-chip .value.red { color: var(--accent3); }
+  .stat-chip .value.blue { color: var(--accent2); }
+  .stat-chip .value.orange { color: var(--accent4); }
+
+  .stat-chip .sub {
+    font-size: 11px;
+    color: var(--text3);
+  }
+
+  /* INPUTS */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text2);
+  }
+
+  .field input, .field select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+
+  .field input:focus, .field select:focus {
+    border-color: var(--accent);
+  }
+
+  .field input::placeholder { color: var(--text3); }
+
+  /* BUTTON */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: 100px;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(200, 240, 77, 0.3);
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover {
+    background: var(--surface3);
+  }
+
+  .btn-danger {
+    background: rgba(240, 77, 122, 0.15);
+    color: var(--accent3);
+    border: 1px solid rgba(240, 77, 122, 0.3);
+  }
+
+  /* ACTIVITY TABLE */
+  .activity-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .activity-table th {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text2);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .activity-table td {
+    padding: 12px;
+    border-bottom: 1px solid rgba(42,42,63,0.5);
+    vertical-align: middle;
+  }
+
+  .activity-table td input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    width: 80px;
+    outline: none;
+    transition: border-color 0.2s;
+    text-align: center;
+  }
+
+  .activity-table td input:focus { border-color: var(--accent); }
+
+  .multiplier-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'Syne', sans-serif;
+  }
+
+  /* PROGRESS BAR */
+  .progress-bar-wrap {
+    background: var(--surface2);
+    border-radius: 100px;
+    height: 8px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.5s ease;
+  }
+
+  /* BALANCE INDICATOR */
+  .balance-box {
+    border-radius: var(--radius);
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .balance-box.surplus {
+    background: rgba(240, 77, 122, 0.08);
+    border: 1px solid rgba(240, 77, 122, 0.2);
+  }
+
+  .balance-box.deficit {
+    background: rgba(77, 240, 200, 0.08);
+    border: 1px solid rgba(77, 240, 200, 0.2);
+  }
+
+  .balance-box.neutral {
+    background: rgba(200, 240, 77, 0.08);
+    border: 1px solid rgba(200, 240, 77, 0.2);
+  }
+
+  /* CHART CONTAINER */
+  .chart-wrap {
+    position: relative;
+    height: 240px;
+  }
+
+  /* HISTORY LIST */
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .history-item:hover {
+    border-color: var(--accent);
+    transform: translateX(4px);
+  }
+
+  .history-date {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    min-width: 90px;
+    color: var(--accent);
+  }
+
+  .history-meta {
+    flex: 1;
+    display: flex;
+    gap: 24px;
+    font-size: 12px;
+    color: var(--text2);
+    flex-wrap: wrap;
+  }
+
+  .history-badge {
+    padding: 2px 10px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+  }
+
+  /* SECTION TITLE */
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+
+  .section-sub {
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 24px;
+  }
+
+  /* DIVIDER */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 24px 0;
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--accent);
+    color: var(--bg);
+    padding: 14px 24px;
+    border-radius: 100px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    z-index: 9999;
+    transform: translateY(80px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+  }
+
+  .toast.show { transform: translateY(0); }
+
+  /* WEEKLY ANALYSIS */
+  .analysis-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    font-size: 13px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .analysis-icon { font-size: 18px; }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--text3);
+  }
+
+  .empty-state .emoji { font-size: 48px; margin-bottom: 16px; }
+  .empty-state h3 { font-family: 'Syne', sans-serif; font-size: 18px; color: var(--text2); margin-bottom: 8px; }
+  .empty-state p { font-size: 13px; }
+
+  /* DATE PICKER */
+  .date-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .date-nav input[type="date"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 16px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .date-nav input[type="date"]:focus { border-color: var(--accent); }
+
+  /* TUNING SECTION */
+  .tuning-card {
+    background: rgba(200, 240, 77, 0.05);
+    border: 1px solid rgba(200, 240, 77, 0.15);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-top: 16px;
+  }
+
+  .tuning-card .card-title { color: var(--accent); }
+
+  /* SCROLL */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  #syncStatus { display: inline-block; }
+
+  /* INLINE FLEX */
+  .flex { display: flex; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .flex-center { display: flex; align-items: center; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .gap-16 { gap: 16px; }
+  .mb-16 { margin-bottom: 16px; }
+  .mb-24 { margin-bottom: 24px; }
+  .mb-32 { margin-bottom: 32px; }
+  .mt-16 { margin-top: 16px; }
+
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .tag-green { background: rgba(200,240,77,0.15); color: var(--accent); }
+  .tag-red { background: rgba(240,77,122,0.15); color: var(--accent3); }
+  .tag-blue { background: rgba(77,240,200,0.15); color: var(--accent2); }
+  .tag-orange { background: rgba(240,164,77,0.15); color: var(--accent4); }
+
+  /* WEEK SELECTOR */
+  .week-days {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .week-day-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 12px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .week-day-btn.has-data {
+    border-color: rgba(200,240,77,0.3);
+    color: var(--accent);
+  }
+
+  .week-day-btn.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  .week-day-btn .day-weight {
+    font-size: 9px;
+    margin-top: 2px;
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">METABO<span>LIX</span></div>
+  <div style="display:flex;align-items:center;gap:20px">
+    <div id="syncStatus" style="font-size:11px;color:var(--text3);letter-spacing:1px;transition:color 0.3s">⟳ Connessione...</div>
+    <div class="date-display" id="headerDate">—</div>
+  </div>
+</div>
+
+<div class="nav">
+  <button class="nav-tab active" onclick="showPage('dashboard')">Dashboard</button>
+  <button class="nav-tab" onclick="showPage('input')">Inserisci Giornata</button>
+  <button class="nav-tab" onclick="showPage('stats')">Statistiche</button>
+  <button class="nav-tab" onclick="showPage('history')">Storico</button>
+  <button class="nav-tab" onclick="manualSync()" style="margin-left:auto">↻ Sincronizza</button>
+</div>
+
+<div class="main">
+
+  <!-- DASHBOARD PAGE -->
+  <div class="page active" id="page-dashboard">
+    <div class="flex-between mb-24">
+      <div>
+        <div class="section-title">Oggi</div>
+        <div class="section-sub" id="dashTodayDate">Nessun dato per oggi</div>
+      </div>
+      <button class="btn btn-primary" onclick="showPage('input')">+ Aggiungi giornata</button>
+    </div>
+
+    <div class="grid-4 mb-16" id="dashStats">
+      <div class="stat-chip">
+        <span class="label">Peso</span>
+        <span class="value" id="dashWeight">—</span>
+        <span class="sub">kg</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">Calorie assunte</span>
+        <span class="value accent" id="dashCalIn">—</span>
+        <span class="sub">kcal</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">TDEE calcolato</span>
+        <span class="value blue" id="dashTDEE">—</span>
+        <span class="sub">kcal</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">Target (-500)</span>
+        <span class="value orange" id="dashTarget">—</span>
+        <span class="sub">kcal</span>
+      </div>
+    </div>
+
+    <div id="dashBalance" class="balance-box neutral mb-16" style="display:none">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:20px" id="dashBalanceVal">—</div>
+        <div style="font-size:12px;color:var(--text2)" id="dashBalanceLabel">—</div>
+      </div>
+      <div id="dashBalancePrediction" style="font-size:12px;color:var(--text2);max-width:300px;text-align:right"></div>
+    </div>
+
+    <div class="grid-2 mb-16">
+      <div class="card">
+        <div class="card-title">Composizione Corporea Oggi</div>
+        <div id="dashBody">
+          <div class="empty-state" style="padding:20px">
+            <div class="emoji">📊</div>
+            <p>Inserisci i dati di oggi</p>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Riepilogo Settimana</div>
+        <div id="dashWeekSummary">
+          <div class="empty-state" style="padding:20px">
+            <div class="emoji">📅</div>
+            <p>Dati insufficienti</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Trend Peso — Ultimi 14 giorni</div>
+      <div class="chart-wrap">
+        <canvas id="dashWeightChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- INPUT PAGE -->
+  <div class="page" id="page-input">
+    <div class="flex-between mb-16">
+      <div>
+        <div class="section-title">Inserisci Giornata</div>
+        <div class="section-sub">Compila tutti i dati del giorno</div>
+      </div>
+    </div>
+
+    <div class="date-nav">
+      <label style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text2)">Data:</label>
+      <input type="date" id="inputDate">
+      <button class="btn btn-secondary" onclick="setInputDateToday()">Oggi</button>
+    </div>
+
+    <div class="grid-2 mb-16">
+      <!-- CORPO -->
+      <div class="card">
+        <div class="card-title">Composizione Corporea</div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Peso (kg)</label>
+            <input type="number" id="inp_weight" step="0.1" placeholder="84.0">
+          </div>
+          <div class="field">
+            <label>Massa Grassa (%)</label>
+            <input type="number" id="inp_bodyfat" step="0.1" placeholder="22.2">
+          </div>
+          <div class="field">
+            <label>Massa Muscolare (kg)</label>
+            <input type="number" id="inp_muscle" step="0.1" placeholder="60.0">
+          </div>
+          <div class="field">
+            <label>Massa Ossea (kg)</label>
+            <input type="number" id="inp_bone" step="0.1" placeholder="3.2">
+          </div>
+          <div class="field">
+            <label>Acqua (%)</label>
+            <input type="number" id="inp_water" step="0.1" placeholder="56.0">
+          </div>
+          <div class="field">
+            <label>Grasso Viscerale</label>
+            <input type="number" id="inp_visceral" step="1" placeholder="9">
+          </div>
+        </div>
+        <div class="field mt-16">
+          <label>Basale Misurato (kcal)</label>
+          <input type="number" id="inp_measuredBMR" step="1" placeholder="1884">
+        </div>
+      </div>
+
+      <!-- CALORIE -->
+      <div class="card">
+        <div class="card-title">Calorie & Calcoli</div>
+        <div class="field">
+          <label>Calorie Assunte (kcal)</label>
+          <input type="number" id="inp_calories" step="1" placeholder="2000">
+        </div>
+
+        <hr class="divider">
+
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text2);margin-bottom:12px">Basale Calcolato (Harris-Benedict)</div>
+        <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--accent)" id="calcBMR">—</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:16px">66.47 + 13.75×P + 5×177 − 6.75×26</div>
+
+        <hr class="divider">
+
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text2);margin-bottom:12px">QAF Attività</div>
+        <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--accent2)" id="calcQAF">—</div>
+
+        <hr class="divider">
+
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text2);margin-bottom:12px">TDEE = Basale × QAF</div>
+        <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--accent4)" id="calcTDEE">—</div>
+
+        <div class="field mt-16">
+          <label>Note giornata</label>
+          <input type="text" id="inp_notes" placeholder="Es: giornata stressante, poco sonno...">
+        </div>
+      </div>
+    </div>
+
+    <!-- ATTIVITÀ -->
+    <div class="card mb-16">
+      <div class="card-title">Attività Giornaliera — Ore per categoria</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Inserisci le ore svolte per ogni tipo di attività. Il totale deve essere ≤ 24h. Il QAF è calcolato come media ponderata.</div>
+
+      <table class="activity-table">
+        <thead>
+          <tr>
+            <th>Attività</th>
+            <th>Moltiplicatore</th>
+            <th>Ore</th>
+            <th>Punti</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>😴 Riposo / Sonno</td>
+            <td><span class="multiplier-badge" style="background:rgba(136,136,170,0.15);color:var(--text2)">×1</span></td>
+            <td><input type="number" id="act_rest" value="8" min="0" max="24" step="0.5" onchange="recalcActivity()"></td>
+            <td style="color:var(--text2);font-family:'Syne',sans-serif;font-weight:700" id="pts_rest">8</td>
+          </tr>
+          <tr>
+            <td>💻 Molto leggera (seduto, PC)</td>
+            <td><span class="multiplier-badge" style="background:rgba(77,240,200,0.1);color:var(--accent2)">×1.5</span></td>
+            <td><input type="number" id="act_vlight" value="8" min="0" max="24" step="0.5" onchange="recalcActivity()"></td>
+            <td style="color:var(--accent2);font-family:'Syne',sans-serif;font-weight:700" id="pts_vlight">12</td>
+          </tr>
+          <tr>
+            <td>🚶 Leggera (passeggiata, faccende)</td>
+            <td><span class="multiplier-badge" style="background:rgba(200,240,77,0.1);color:var(--accent)">×2.5</span></td>
+            <td><input type="number" id="act_light" value="4" min="0" max="24" step="0.5" onchange="recalcActivity()"></td>
+            <td style="color:var(--accent);font-family:'Syne',sans-serif;font-weight:700" id="pts_light">10</td>
+          </tr>
+          <tr>
+            <td>🚴 Moderata (ciclismo, ballo)</td>
+            <td><span class="multiplier-badge" style="background:rgba(240,164,77,0.1);color:var(--accent4)">×5</span></td>
+            <td><input type="number" id="act_moderate" value="2" min="0" max="24" step="0.5" onchange="recalcActivity()"></td>
+            <td style="color:var(--accent4);font-family:'Syne',sans-serif;font-weight:700" id="pts_moderate">10</td>
+          </tr>
+          <tr>
+            <td>🏋️ Pesante (palestra, sport)</td>
+            <td><span class="multiplier-badge" style="background:rgba(240,77,122,0.1);color:var(--accent3)">×7</span></td>
+            <td><input type="number" id="act_heavy" value="2" min="0" max="24" step="0.5" onchange="recalcActivity()"></td>
+            <td style="color:var(--accent3);font-family:'Syne',sans-serif;font-weight:700" id="pts_heavy">14</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:16px;padding:16px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border)">
+        <div class="flex-between">
+          <span style="font-size:12px;color:var(--text2)">Totale ore: <span id="totalHours" style="color:var(--text)">24</span></span>
+          <span style="font-size:12px;color:var(--text2)">Totale punti: <span id="totalPoints" style="color:var(--accent)">54</span></span>
+          <span style="font-size:12px;color:var(--text2)">QAF = <span id="qafDisplay" style="color:var(--accent2);font-family:'Syne',sans-serif;font-weight:700">2.25</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-12">
+      <button class="btn btn-primary" onclick="saveDay()">💾 Salva Giornata</button>
+      <button class="btn btn-secondary" onclick="clearInputForm()">🗑️ Cancella</button>
+    </div>
+  </div>
+
+  <!-- STATS PAGE -->
+  <div class="page" id="page-stats">
+    <div class="flex-between mb-24">
+      <div>
+        <div class="section-title">Statistiche</div>
+        <div class="section-sub">Analisi settimanale, mensile e progressi verso il goal</div>
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn-secondary" id="statsWeekBtn" onclick="statsMode='week';renderStats()" style="background:var(--accent);color:var(--bg)">Settimana</button>
+        <button class="btn btn-secondary" id="statsMonthBtn" onclick="statsMode='month';renderStats()">Mese</button>
+      </div>
+    </div>
+
+    <!-- WEEK SUMMARY KPIs -->
+    <div class="grid-4 mb-16" id="statsKPIs"></div>
+
+    <!-- TUNING ANALYSIS -->
+    <div id="statsTuning" class="tuning-card mb-16" style="display:none">
+      <div class="card-title">⚙️ Analisi & Tuning TDEE</div>
+      <div id="statsTuningContent"></div>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="grid-2 mb-16">
+      <div class="card">
+        <div class="card-title">Calorie: Assunte vs TDEE vs Target</div>
+        <div class="chart-wrap">
+          <canvas id="statsCalChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Trend Peso</div>
+        <div class="chart-wrap">
+          <canvas id="statsWeightChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2 mb-16">
+      <div class="card">
+        <div class="card-title">Bilancio Calorico Giornaliero</div>
+        <div class="chart-wrap">
+          <canvas id="statsBalanceChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">QAF — Livello Attività</div>
+        <div class="chart-wrap">
+          <canvas id="statsQAFChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2 mb-16">
+      <div class="card">
+        <div class="card-title">Composizione Corporea — Trend</div>
+        <div class="chart-wrap">
+          <canvas id="statsBodyChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Perdita Peso Prevista vs Reale</div>
+        <div class="chart-wrap">
+          <canvas id="statsPredChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROGRESS TO GOAL -->
+    <div class="card mb-16">
+      <div class="card-title">🎯 Progressi verso l'obiettivo (76 kg lean)</div>
+      <div id="statsGoal"></div>
+    </div>
+
+    <!-- DAILY BREAKDOWN -->
+    <div class="card">
+      <div class="card-title">Dettaglio Giornaliero</div>
+      <div id="statsDailyTable"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY PAGE -->
+  <div class="page" id="page-history">
+    <div class="flex-between mb-24">
+      <div>
+        <div class="section-title">Storico</div>
+        <div class="section-sub" id="historyCount">0 giorni registrati</div>
+      </div>
+    </div>
+    <div id="historyList"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">Salvato!</div>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const USER = { age: 26, height: 177, sex: 'M', goalWeight: 76 };
+const STORAGE_KEY = 'metabolix_data_v1';
+const SUPABASE_URL = 'https://lllvswrdnzjchdpjiukx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsbHZzd3JkbnpqY2hkcGppdWt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MzAyMTcsImV4cCI6MjA5MDIwNjIxN30.Hej8_pS_5ueTwrywwxw_Zd99mlaemoC7nKihhFSOFO0';
+
+// ============================================================
+// SYNC STATUS UI
+// ============================================================
+function setSyncStatus(state, msg) {
+  // state: 'syncing' | 'ok' | 'offline' | 'error'
+  let el = document.getElementById('syncStatus');
+  if (!el) return;
+  const icons = { syncing: '⟳', ok: '☁️', offline: '📴', error: '⚠️' };
+  const colors = { syncing: 'var(--text2)', ok: 'var(--accent2)', offline: 'var(--accent4)', error: 'var(--accent3)' };
+  el.style.color = colors[state];
+  el.textContent = (icons[state] || '') + ' ' + msg;
+  if (state === 'syncing') el.style.animation = 'spin 1s linear infinite';
+  else el.style.animation = '';
+}
+
+// ============================================================
+// SUPABASE API
+// ============================================================
+function sbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY,
+    'Prefer': 'return=representation'
+  };
+}
+
+// Map local camelCase obj → DB snake_case row
+function toRow(dateStr, d) {
+  return {
+    date: dateStr,
+    weight: d.weight,
+    bodyfat: d.bodyfat,
+    muscle: d.muscle,
+    bone: d.bone,
+    water: d.water,
+    visceral: d.visceral,
+    measured_bmr: d.measuredBMR,
+    calories: d.calories,
+    notes: d.notes || '',
+    hours: d.hours,
+    bmr: d.bmr,
+    qaf: d.qaf,
+    tdee: d.tdee,
+    target: d.target,
+    balance: d.balance,
+    saved_at: d.savedAt || new Date().toISOString()
+  };
+}
+
+// Map DB row → local camelCase obj
+function fromRow(row) {
+  return {
+    date: row.date,
+    weight: row.weight,
+    bodyfat: row.bodyfat,
+    muscle: row.muscle,
+    bone: row.bone,
+    water: row.water,
+    visceral: row.visceral,
+    measuredBMR: row.measured_bmr,
+    calories: row.calories,
+    notes: row.notes,
+    hours: row.hours,
+    bmr: row.bmr,
+    qaf: row.qaf,
+    tdee: row.tdee,
+    target: row.target,
+    balance: row.balance,
+    savedAt: row.saved_at
+  };
+}
+
+async function sbFetchAll() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/daily_logs?select=*&order=date.asc`,
+    { headers: sbHeaders() }
+  );
+  if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+  return await res.json();
+}
+
+async function sbUpsert(dateStr, dayObj) {
+  const row = toRow(dateStr, dayObj);
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/daily_logs`,
+    {
+      method: 'POST',
+      headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(row)
+    }
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error('Upsert failed: ' + err);
+  }
+  return await res.json();
+}
+
+// ============================================================
+// DATA LAYER — localStorage as cache, Supabase as source of truth
+// ============================================================
+function loadCache() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function saveCache(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function getDayData(dateStr) {
+  return loadCache()[dateStr] || null;
+}
+
+// Upsert local + remote
+async function saveDayData(dateStr, dayObj) {
+  // 1. Save to cache immediately (optimistic)
+  const cache = loadCache();
+  cache[dateStr] = dayObj;
+  saveCache(cache);
+
+  // 2. Push to Supabase
+  setSyncStatus('syncing', 'Salvataggio...');
+  try {
+    await sbUpsert(dateStr, dayObj);
+    setSyncStatus('ok', 'Sincronizzato');
+  } catch (e) {
+    console.warn('Supabase upsert failed, will retry on next sync', e);
+    setSyncStatus('offline', 'Offline — salvato in locale');
+    // Mark as pending
+    const pending = JSON.parse(localStorage.getItem('metabolix_pending') || '[]');
+    if (!pending.includes(dateStr)) pending.push(dateStr);
+    localStorage.setItem('metabolix_pending', JSON.stringify(pending));
+  }
+}
+
+function getAllDays() {
+  const data = loadCache();
+  return Object.entries(data)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, d]) => ({ date, ...d }));
+}
+
+// ============================================================
+// FULL SYNC — pull from Supabase, merge into cache
+// ============================================================
+async function syncFromSupabase() {
+  setSyncStatus('syncing', 'Sincronizzazione...');
+  try {
+    const rows = await sbFetchAll();
+    const cache = loadCache();
+    rows.forEach(row => {
+      const local = cache[row.date];
+      const remoteTime = new Date(row.saved_at || 0).getTime();
+      const localTime = new Date(local?.savedAt || 0).getTime();
+      // Remote wins if newer or local missing
+      if (!local || remoteTime >= localTime) {
+        cache[row.date] = fromRow(row);
+      }
+    });
+    saveCache(cache);
+
+    // Push any pending local-only entries
+    await flushPending(cache);
+
+    setSyncStatus('ok', `Sincronizzato • ${rows.length} giorni`);
+    return true;
+  } catch (e) {
+    console.warn('Sync from Supabase failed:', e);
+    setSyncStatus('offline', 'Modalità offline');
+    return false;
+  }
+}
+
+// Push entries saved offline
+async function flushPending(cache) {
+  const pending = JSON.parse(localStorage.getItem('metabolix_pending') || '[]');
+  if (!pending.length) return;
+  const stillPending = [];
+  for (const dateStr of pending) {
+    if (cache[dateStr]) {
+      try {
+        await sbUpsert(dateStr, cache[dateStr]);
+      } catch {
+        stillPending.push(dateStr);
+      }
+    }
+  }
+  localStorage.setItem('metabolix_pending', JSON.stringify(stillPending));
+}
+
+// ============================================================
+// MIGRATION — push any existing localStorage data to Supabase
+// ============================================================
+async function migrateLocalData() {
+  const cache = loadCache();
+  const entries = Object.entries(cache);
+  if (!entries.length) return;
+  setSyncStatus('syncing', `Migrazione ${entries.length} giorni...`);
+  let ok = 0;
+  for (const [dateStr, dayObj] of entries) {
+    try {
+      await sbUpsert(dateStr, dayObj);
+      ok++;
+    } catch (e) {
+      console.warn('Migration failed for', dateStr, e);
+    }
+  }
+  setSyncStatus('ok', `Migrazione completata: ${ok}/${entries.length} giorni`);
+}
+
+// ============================================================
+// FORMULAS
+// ============================================================
+function calcBMR(weight) {
+  return 66.47 + 13.75 * weight + 5 * USER.height - 6.75 * USER.age;
+}
+
+function calcQAF(hours) {
+  const mults = { rest: 1, vlight: 1.5, light: 2.5, moderate: 5, heavy: 7 };
+  const total = Object.keys(mults).reduce((s, k) => s + (hours[k] || 0), 0);
+  if (total <= 0) return 1;
+  const pts = Object.keys(mults).reduce((s, k) => s + (hours[k] || 0) * mults[k], 0);
+  return pts / 24; // divided by 24 always
+}
+
+function calcTDEE(bmr, qaf) {
+  return bmr * qaf;
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+let currentPage = 'dashboard';
+
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t => {
+    if (t.textContent.toLowerCase().includes(page === 'dashboard' ? 'dash' :
+        page === 'input' ? 'inserisci' :
+        page === 'stats' ? 'stat' : 'stor')) {
+      t.classList.add('active');
+    }
+  });
+  currentPage = page;
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'stats') renderStats();
+  if (page === 'history') renderHistory();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  // Set today's date in header
+  const now = new Date();
+  document.getElementById('headerDate').textContent = now.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  // Set input date to today
+  setInputDateToday();
+
+  // Attach weight input listener for live BMR calc
+  document.getElementById('inp_weight').addEventListener('input', updateLiveCalcs);
+  document.querySelectorAll('[id^="act_"]').forEach(el => el.addEventListener('input', recalcActivity));
+
+  recalcActivity();
+  renderDashboard();
+}
+
+function setInputDateToday() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('inputDate').value = today;
+
+  // If data exists for today, pre-fill
+  const existing = getDayData(today);
+  if (existing) fillInputForm(existing);
+  else clearInputForm(false);
+}
+
+function fillInputForm(d) {
+  document.getElementById('inp_weight').value = d.weight || '';
+  document.getElementById('inp_bodyfat').value = d.bodyfat || '';
+  document.getElementById('inp_muscle').value = d.muscle || '';
+  document.getElementById('inp_bone').value = d.bone || '';
+  document.getElementById('inp_water').value = d.water || '';
+  document.getElementById('inp_visceral').value = d.visceral || '';
+  document.getElementById('inp_measuredBMR').value = d.measuredBMR || '';
+  document.getElementById('inp_calories').value = d.calories || '';
+  document.getElementById('inp_notes').value = d.notes || '';
+  document.getElementById('act_rest').value = d.hours?.rest ?? 8;
+  document.getElementById('act_vlight').value = d.hours?.vlight ?? 8;
+  document.getElementById('act_light').value = d.hours?.light ?? 4;
+  document.getElementById('act_moderate').value = d.hours?.moderate ?? 2;
+  document.getElementById('act_heavy').value = d.hours?.heavy ?? 2;
+  recalcActivity();
+}
+
+function clearInputForm(resetActivity = true) {
+  ['inp_weight','inp_bodyfat','inp_muscle','inp_bone','inp_water','inp_visceral',
+   'inp_measuredBMR','inp_calories','inp_notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  if (resetActivity) {
+    document.getElementById('act_rest').value = 8;
+    document.getElementById('act_vlight').value = 8;
+    document.getElementById('act_light').value = 4;
+    document.getElementById('act_moderate').value = 2;
+    document.getElementById('act_heavy').value = 2;
+    recalcActivity();
+  }
+  document.getElementById('calcBMR').textContent = '—';
+  document.getElementById('calcQAF').textContent = '—';
+  document.getElementById('calcTDEE').textContent = '—';
+}
+
+// ============================================================
+// LIVE CALC IN INPUT
+// ============================================================
+function recalcActivity() {
+  const hours = {
+    rest: parseFloat(document.getElementById('act_rest').value) || 0,
+    vlight: parseFloat(document.getElementById('act_vlight').value) || 0,
+    light: parseFloat(document.getElementById('act_light').value) || 0,
+    moderate: parseFloat(document.getElementById('act_moderate').value) || 0,
+    heavy: parseFloat(document.getElementById('act_heavy').value) || 0,
+  };
+  const mults = { rest: 1, vlight: 1.5, light: 2.5, moderate: 5, heavy: 7 };
+  const totalH = Object.values(hours).reduce((a, b) => a + b, 0);
+  const pts = { rest: hours.rest*1, vlight: hours.vlight*1.5, light: hours.light*2.5, moderate: hours.moderate*5, heavy: hours.heavy*7 };
+  const totalPts = Object.values(pts).reduce((a, b) => a + b, 0);
+  const qaf = totalPts / 24;
+
+  document.getElementById('pts_rest').textContent = pts.rest.toFixed(1);
+  document.getElementById('pts_vlight').textContent = pts.vlight.toFixed(1);
+  document.getElementById('pts_light').textContent = pts.light.toFixed(1);
+  document.getElementById('pts_moderate').textContent = pts.moderate.toFixed(1);
+  document.getElementById('pts_heavy').textContent = pts.heavy.toFixed(1);
+  document.getElementById('totalHours').textContent = totalH.toFixed(1);
+  document.getElementById('totalPoints').textContent = totalPts.toFixed(1);
+  document.getElementById('qafDisplay').textContent = qaf.toFixed(3);
+
+  updateLiveCalcs();
+}
+
+function updateLiveCalcs() {
+  const weight = parseFloat(document.getElementById('inp_weight').value);
+  if (!weight) {
+    document.getElementById('calcBMR').textContent = '—';
+    document.getElementById('calcQAF').textContent = '—';
+    document.getElementById('calcTDEE').textContent = '—';
+    return;
+  }
+  const bmr = calcBMR(weight);
+  const hours = {
+    rest: parseFloat(document.getElementById('act_rest').value) || 0,
+    vlight: parseFloat(document.getElementById('act_vlight').value) || 0,
+    light: parseFloat(document.getElementById('act_light').value) || 0,
+    moderate: parseFloat(document.getElementById('act_moderate').value) || 0,
+    heavy: parseFloat(document.getElementById('act_heavy').value) || 0,
+  };
+  const qaf = calcQAF(hours);
+  const tdee = calcTDEE(bmr, qaf);
+
+  document.getElementById('calcBMR').textContent = Math.round(bmr) + ' kcal';
+  document.getElementById('calcQAF').textContent = qaf.toFixed(3);
+  document.getElementById('calcTDEE').textContent = Math.round(tdee) + ' kcal';
+}
+
+// ============================================================
+// SAVE DAY
+// ============================================================
+async function saveDay() {
+  const date = document.getElementById('inputDate').value;
+  if (!date) return showToast('Seleziona una data!');
+
+  const weight = parseFloat(document.getElementById('inp_weight').value);
+  if (!weight) return showToast('Inserisci il peso!');
+
+  const calories = parseFloat(document.getElementById('inp_calories').value);
+  if (!calories) return showToast('Inserisci le calorie!');
+
+  const hours = {
+    rest: parseFloat(document.getElementById('act_rest').value) || 0,
+    vlight: parseFloat(document.getElementById('act_vlight').value) || 0,
+    light: parseFloat(document.getElementById('act_light').value) || 0,
+    moderate: parseFloat(document.getElementById('act_moderate').value) || 0,
+    heavy: parseFloat(document.getElementById('act_heavy').value) || 0,
+  };
+
+  const bmr = calcBMR(weight);
+  const qaf = calcQAF(hours);
+  const tdee = calcTDEE(bmr, qaf);
+
+  const dayObj = {
+    weight,
+    bodyfat: parseFloat(document.getElementById('inp_bodyfat').value) || null,
+    muscle: parseFloat(document.getElementById('inp_muscle').value) || null,
+    bone: parseFloat(document.getElementById('inp_bone').value) || null,
+    water: parseFloat(document.getElementById('inp_water').value) || null,
+    visceral: parseFloat(document.getElementById('inp_visceral').value) || null,
+    measuredBMR: parseFloat(document.getElementById('inp_measuredBMR').value) || null,
+    calories,
+    notes: document.getElementById('inp_notes').value,
+    hours,
+    bmr: Math.round(bmr),
+    qaf: parseFloat(qaf.toFixed(4)),
+    tdee: Math.round(tdee),
+    target: Math.round(tdee - 500),
+    balance: Math.round(calories - tdee),
+    savedAt: new Date().toISOString()
+  };
+
+  await saveDayData(date, dayObj);
+  showToast('✅ Giornata salvata!');
+  renderDashboard();
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+let dashWeightChartObj = null;
+
+function renderDashboard() {
+  const today = new Date().toISOString().split('T')[0];
+  const d = getDayData(today);
+  const allDays = getAllDays();
+
+  document.getElementById('dashTodayDate').textContent = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  if (d) {
+    document.getElementById('dashWeight').textContent = d.weight;
+    document.getElementById('dashCalIn').textContent = d.calories;
+    document.getElementById('dashTDEE').textContent = d.tdee;
+    document.getElementById('dashTarget').textContent = d.target;
+
+    const bal = d.balance;
+    const balBox = document.getElementById('dashBalance');
+    balBox.style.display = 'flex';
+    balBox.className = 'balance-box mb-16 ' + (bal > 100 ? 'surplus' : bal < -100 ? 'deficit' : 'neutral');
+    document.getElementById('dashBalanceVal').textContent = (bal >= 0 ? '+' : '') + Math.round(bal) + ' kcal';
+    document.getElementById('dashBalanceLabel').textContent = bal > 100 ? '⚠️ Surplus calorico' : bal < -100 ? '✅ Deficit calorico' : '✅ In target';
+    document.getElementById('dashBalancePrediction').textContent = bal < 0
+      ? `A questo ritmo perderesti ~${Math.abs(bal*7/7700).toFixed(2)} kg/settimana`
+      : `Rischi di non perdere peso. Riduci le calorie o aumenta l'attività.`;
+
+    // Body composition
+    let bodyHTML = '';
+    const fields = [
+      ['Massa grassa', d.bodyfat, '%', 'var(--accent3)'],
+      ['Massa muscolare', d.muscle, 'kg', 'var(--accent2)'],
+      ['Massa ossea', d.bone, 'kg', 'var(--text2)'],
+      ['Acqua', d.water, '%', 'var(--accent)'],
+      ['Grasso viscerale', d.visceral, '', 'var(--accent4)'],
+      ['BMR misurato', d.measuredBMR, 'kcal', 'var(--accent)'],
+      ['BMR calcolato', d.bmr, 'kcal', 'var(--accent2)'],
+    ];
+    fields.forEach(([label, val, unit, color]) => {
+      if (val) bodyHTML += `<div class="analysis-row"><span style="flex:1;font-size:12px;color:var(--text2)">${label}</span><span style="font-family:'Syne',sans-serif;font-weight:700;color:${color}">${val} ${unit}</span></div>`;
+    });
+    document.getElementById('dashBody').innerHTML = bodyHTML || '<div style="color:var(--text3);font-size:12px">Dati incompleti</div>';
+  }
+
+  // Week summary
+  const weekDays = getWeekDays();
+  const weekData = weekDays.map(d => getDayData(d)).filter(Boolean);
+  if (weekData.length > 0) {
+    const avgCal = avg(weekData.map(d => d.calories));
+    const avgTDEE = avg(weekData.map(d => d.tdee));
+    const avgBal = avgCal - avgTDEE;
+    document.getElementById('dashWeekSummary').innerHTML = `
+      <div class="analysis-row"><span style="flex:1;font-size:12px;color:var(--text2)">Giorni registrati</span><span style="font-family:'Syne',sans-serif;font-weight:700">${weekData.length}/7</span></div>
+      <div class="analysis-row"><span style="flex:1;font-size:12px;color:var(--text2)">Calorie medie/giorno</span><span style="font-family:'Syne',sans-serif;font-weight:700;color:var(--accent)">${Math.round(avgCal)} kcal</span></div>
+      <div class="analysis-row"><span style="flex:1;font-size:12px;color:var(--text2)">TDEE medio/giorno</span><span style="font-family:'Syne',sans-serif;font-weight:700;color:var(--accent2)">${Math.round(avgTDEE)} kcal</span></div>
+      <div class="analysis-row"><span style="flex:1;font-size:12px;color:var(--text2)">Bilancio medio</span><span style="font-family:'Syne',sans-serif;font-weight:700;color:${avgBal < 0 ? 'var(--accent2)' : 'var(--accent3)'}">${avgBal >= 0 ? '+' : ''}${Math.round(avgBal)} kcal</span></div>
+      <div class="analysis-row"><span style="flex:1;font-size:12px;color:var(--text2)">Perdita prevista</span><span style="font-family:'Syne',sans-serif;font-weight:700;color:var(--accent)">${avgBal < 0 ? (Math.abs(avgBal*7)/7700).toFixed(2) + ' kg' : '—'}</span></div>
+    `;
+  }
+
+  // Weight chart
+  const last14 = allDays.slice(-14);
+  if (dashWeightChartObj) dashWeightChartObj.destroy();
+  if (last14.length > 0) {
+    const ctx = document.getElementById('dashWeightChart').getContext('2d');
+    dashWeightChartObj = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: last14.map(d => formatDateShort(d.date)),
+        datasets: [{
+          label: 'Peso (kg)',
+          data: last14.map(d => d.weight),
+          borderColor: '#c8f04d',
+          backgroundColor: 'rgba(200,240,77,0.1)',
+          borderWidth: 2,
+          pointBackgroundColor: '#c8f04d',
+          pointRadius: 4,
+          tension: 0.3,
+          fill: true
+        }, {
+          label: 'Goal (76 kg)',
+          data: last14.map(() => 76),
+          borderColor: 'rgba(77,240,200,0.5)',
+          borderWidth: 1,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          fill: false
+        }]
+      },
+      options: chartOptions()
+    });
+  }
+}
+
+// ============================================================
+// STATS
+// ============================================================
+let statsMode = 'week';
+let statsCharts = {};
+
+function renderStats() {
+  // Update button styles
+  document.getElementById('statsWeekBtn').style.background = statsMode === 'week' ? 'var(--accent)' : '';
+  document.getElementById('statsWeekBtn').style.color = statsMode === 'week' ? 'var(--bg)' : '';
+  document.getElementById('statsMonthBtn').style.background = statsMode === 'month' ? 'var(--accent)' : '';
+  document.getElementById('statsMonthBtn').style.color = statsMode === 'month' ? 'var(--bg)' : '';
+
+  const allDays = getAllDays();
+  if (allDays.length === 0) {
+    document.getElementById('statsKPIs').innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="emoji">📊</div><h3>Nessun dato</h3><p>Inizia ad inserire le tue giornate</p></div>';
+    return;
+  }
+
+  // Get relevant days
+  const days = statsMode === 'week' ? getWeekDaysData() : getMonthDaysData();
+
+  // KPIs
+  if (days.length > 0) {
+    const avgCal = avg(days.map(d => d.calories));
+    const avgTDEE = avg(days.map(d => d.tdee));
+    const avgBalance = avgCal - avgTDEE;
+    const weightFirst = days[0]?.weight || 0;
+    const weightLast = days[days.length - 1]?.weight || 0;
+    const weightDelta = weightLast - weightFirst;
+
+    document.getElementById('statsKPIs').innerHTML = `
+      <div class="stat-chip">
+        <span class="label">Giorni registrati</span>
+        <span class="value">${days.length}</span>
+        <span class="sub">${statsMode === 'week' ? 'questa settimana' : 'questo mese'}</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">Calorie medie</span>
+        <span class="value accent">${Math.round(avgCal)}</span>
+        <span class="sub">kcal/giorno</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">TDEE medio</span>
+        <span class="value blue">${Math.round(avgTDEE)}</span>
+        <span class="sub">kcal/giorno</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">Bilancio medio</span>
+        <span class="value ${avgBalance < 0 ? 'blue' : 'red'}">${avgBalance >= 0 ? '+' : ''}${Math.round(avgBalance)}</span>
+        <span class="sub">kcal/giorno</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">Variazione peso</span>
+        <span class="value ${weightDelta < 0 ? 'accent' : 'red'}">${weightDelta >= 0 ? '+' : ''}${weightDelta.toFixed(1)}</span>
+        <span class="sub">kg nel periodo</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">Perdita prevista</span>
+        <span class="value orange">${avgBalance < 0 ? (Math.abs(avgBalance * (statsMode === 'week' ? 7 : 30)) / 7700).toFixed(2) : '0.00'}</span>
+        <span class="sub">kg nel periodo</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">QAF medio</span>
+        <span class="value">${avg(days.map(d => d.qaf)).toFixed(2)}</span>
+        <span class="sub">livello attività</span>
+      </div>
+      <div class="stat-chip">
+        <span class="label">Target calorico</span>
+        <span class="value orange">${Math.round(avgTDEE - 500)}</span>
+        <span class="sub">kcal/giorno</span>
+      </div>
+    `;
+
+    // Tuning analysis (solo settimana)
+    if (statsMode === 'week' && days.length >= 3) {
+      const realDelta = weightDelta;
+      const expectedDelta = -(avgBalance * 7) / 7700;
+      const tdeeError = (realDelta - expectedDelta) * 7700 / 7;
+      const adjustedTDEE = avgTDEE - tdeeError;
+
+      let tuningMsg = '';
+      let tuningClass = '';
+      if (Math.abs(realDelta) < 0.1 && avgBalance < -200) {
+        tuningMsg = `⚠️ Sei in deficit di ${Math.abs(Math.round(avgBalance))} kcal/giorno ma non stai dimagrendo. Il tuo TDEE reale potrebbe essere inferiore al calcolato. Suggerito TDEE corretto: <strong style="color:var(--accent)">${Math.round(adjustedTDEE)} kcal</strong> → Target: <strong>${Math.round(adjustedTDEE - 500)} kcal</strong>`;
+        tuningClass = 'tag-orange';
+      } else if (realDelta < expectedDelta - 0.2) {
+        tuningMsg = `📉 Stai dimagrendo più del previsto (${realDelta.toFixed(2)} kg vs ${expectedDelta.toFixed(2)} kg attesi). Considera di aumentare leggermente le calorie. TDEE corretto stimato: <strong style="color:var(--accent)">${Math.round(adjustedTDEE)} kcal</strong>`;
+        tuningClass = 'tag-blue';
+      } else if (realDelta <= 0 && avgBalance < -300) {
+        tuningMsg = `✅ Ottimo! La perdita reale (${Math.abs(realDelta).toFixed(2)} kg) è in linea con il deficit. TDEE stimato accurato: ~<strong style="color:var(--accent)">${Math.round(avgTDEE)} kcal</strong>`;
+        tuningClass = 'tag-green';
+      } else if (realDelta >= 0 && avgBalance < 0) {
+        tuningMsg = `⚠️ Nonostante il deficit sei in stagnazione/aumento. Possibile ritenzione idrica o TDEE sovrastimato. TDEE corretto stimato: <strong style="color:var(--accent3)">${Math.round(adjustedTDEE)} kcal</strong>`;
+        tuningClass = 'tag-red';
+      } else {
+        tuningMsg = `📊 Continua a monitorare. Servono almeno 5-7 giorni per un'analisi accurata.`;
+        tuningClass = 'tag-blue';
+      }
+
+      document.getElementById('statsTuning').style.display = 'block';
+      document.getElementById('statsTuningContent').innerHTML = `
+        <div style="margin-bottom:12px">${tuningMsg}</div>
+        <div class="grid-3" style="font-size:12px;gap:8px">
+          <div style="background:var(--surface2);padding:12px;border-radius:8px;border:1px solid var(--border)">
+            <div style="color:var(--text3);margin-bottom:4px">Perdita reale</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px;color:${realDelta < 0 ? 'var(--accent)' : 'var(--accent3)'}">${realDelta.toFixed(2)} kg</div>
+          </div>
+          <div style="background:var(--surface2);padding:12px;border-radius:8px;border:1px solid var(--border)">
+            <div style="color:var(--text3);margin-bottom:4px">Perdita attesa</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px;color:var(--accent2)">${expectedDelta > 0 ? expectedDelta.toFixed(2) : '0.00'} kg</div>
+          </div>
+          <div style="background:var(--surface2);padding:12px;border-radius:8px;border:1px solid var(--border)">
+            <div style="color:var(--text3);margin-bottom:4px">TDEE corretto stimato</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px;color:var(--accent4)">${Math.round(adjustedTDEE)} kcal</div>
+          </div>
+        </div>
+      `;
+    } else {
+      document.getElementById('statsTuning').style.display = 'none';
+    }
+
+    // Charts
+    destroyCharts();
+    renderStatsCharts(days);
+    renderGoal(allDays);
+    renderDailyTable(days);
+  }
+}
+
+function renderStatsCharts(days) {
+  const labels = days.map(d => formatDateShort(d.date));
+
+  // Calorie chart
+  statsCharts.cal = new Chart(document.getElementById('statsCalChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Calorie assunte', data: days.map(d => d.calories), backgroundColor: 'rgba(200,240,77,0.7)', borderRadius: 4 },
+        { label: 'TDEE', data: days.map(d => d.tdee), type: 'line', borderColor: '#4df0c8', borderWidth: 2, pointRadius: 3, tension: 0.3, fill: false },
+        { label: 'Target', data: days.map(d => d.target), type: 'line', borderColor: '#f0a44d', borderWidth: 1.5, borderDash: [4,4], pointRadius: 0, fill: false }
+      ]
+    },
+    options: chartOptions()
+  });
+
+  // Weight chart
+  statsCharts.weight = new Chart(document.getElementById('statsWeightChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Peso (kg)', data: days.map(d => d.weight), borderColor: '#c8f04d', backgroundColor: 'rgba(200,240,77,0.1)', borderWidth: 2, pointRadius: 4, tension: 0.3, fill: true },
+        { label: 'Goal (76kg)', data: days.map(() => 76), borderColor: 'rgba(77,240,200,0.4)', borderWidth: 1, borderDash: [5,5], pointRadius: 0, fill: false }
+      ]
+    },
+    options: chartOptions()
+  });
+
+  // Balance chart
+  statsCharts.balance = new Chart(document.getElementById('statsBalanceChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Bilancio calorico',
+        data: days.map(d => d.balance),
+        backgroundColor: days.map(d => d.balance < 0 ? 'rgba(77,240,200,0.7)' : 'rgba(240,77,122,0.7)'),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      ...chartOptions(),
+      plugins: { ...chartOptions().plugins, annotation: {} }
+    }
+  });
+
+  // QAF chart
+  statsCharts.qaf = new Chart(document.getElementById('statsQAFChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{ label: 'QAF', data: days.map(d => d.qaf), borderColor: '#f0a44d', backgroundColor: 'rgba(240,164,77,0.1)', borderWidth: 2, pointRadius: 4, tension: 0.3, fill: true }]
+    },
+    options: chartOptions()
+  });
+
+  // Body composition chart (if data available)
+  const bodyDays = days.filter(d => d.bodyfat && d.muscle);
+  if (bodyDays.length > 0) {
+    statsCharts.body = new Chart(document.getElementById('statsBodyChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: bodyDays.map(d => formatDateShort(d.date)),
+        datasets: [
+          { label: 'Massa muscolare (kg)', data: bodyDays.map(d => d.muscle), borderColor: '#4df0c8', borderWidth: 2, pointRadius: 3, tension: 0.3, fill: false, yAxisID: 'y' },
+          { label: 'Massa grassa (%)', data: bodyDays.map(d => d.bodyfat), borderColor: '#f04d7a', borderWidth: 2, pointRadius: 3, tension: 0.3, fill: false, yAxisID: 'y1' }
+        ]
+      },
+      options: {
+        ...chartOptions(),
+        scales: {
+          x: { ticks: { color: '#8888aa', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#2a2a3f' } },
+          y: { type: 'linear', position: 'left', ticks: { color: '#4df0c8', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#2a2a3f' } },
+          y1: { type: 'linear', position: 'right', ticks: { color: '#f04d7a', font: { family: 'DM Mono', size: 10 } }, grid: { drawOnChartArea: false } }
+        }
+      }
+    });
+  }
+
+  // Prediction vs real
+  const allDays = getAllDays();
+  if (allDays.length >= 2) {
+    let cumReal = 0;
+    let cumPred = 0;
+    const realArr = [], predArr = [];
+    for (let i = 0; i < allDays.length; i++) {
+      if (i > 0) cumReal += allDays[i].weight - allDays[i-1].weight;
+      cumPred += allDays[i].balance / 7700;
+      realArr.push(parseFloat(cumReal.toFixed(2)));
+      predArr.push(parseFloat(cumPred.toFixed(2)));
+    }
+    statsCharts.pred = new Chart(document.getElementById('statsPredChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: allDays.map(d => formatDateShort(d.date)),
+        datasets: [
+          { label: 'Reale (kg)', data: realArr, borderColor: '#c8f04d', borderWidth: 2, pointRadius: 3, tension: 0.3, fill: false },
+          { label: 'Prevista (kcal/7700)', data: predArr, borderColor: 'rgba(77,240,200,0.6)', borderWidth: 1.5, borderDash: [4,4], pointRadius: 0, fill: false }
+        ]
+      },
+      options: chartOptions()
+    });
+  }
+}
+
+function renderGoal(allDays) {
+  const current = allDays[allDays.length - 1]?.weight || 84;
+  const goal = USER.goalWeight;
+  const toGo = current - goal;
+  const pct = Math.min(100, ((84 - current) / (84 - goal)) * 100);
+  const daysNeeded = Math.ceil((toGo * 7700) / 500);
+
+  document.getElementById('statsGoal').innerHTML = `
+    <div class="grid-3" style="margin-bottom:16px">
+      <div class="stat-chip"><span class="label">Peso attuale</span><span class="value">${current} kg</span></div>
+      <div class="stat-chip"><span class="label">Obiettivo</span><span class="value accent">${goal} kg</span></div>
+      <div class="stat-chip"><span class="label">Da perdere</span><span class="value orange">${toGo.toFixed(1)} kg</span></div>
+    </div>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--text2)">Progresso verso l'obiettivo</div>
+    <div class="progress-bar-wrap" style="height:16px;margin-bottom:8px">
+      <div class="progress-bar-fill" style="width:${pct.toFixed(1)}%;background:linear-gradient(90deg,var(--accent2),var(--accent))"></div>
+    </div>
+    <div class="flex-between" style="font-size:11px;color:var(--text2)">
+      <span>84 kg (inizio)</span>
+      <span style="color:var(--accent);font-family:'Syne',sans-serif;font-weight:700">${pct.toFixed(1)}% completato</span>
+      <span>76 kg (goal)</span>
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:var(--text2)">
+      A −500 kcal/giorno: tempo stimato <strong style="color:var(--accent)">${daysNeeded} giorni</strong> (~${Math.ceil(daysNeeded/7)} settimane, entro ~${estimateDate(daysNeeded)})
+    </div>
+  `;
+}
+
+function renderDailyTable(days) {
+  if (days.length === 0) return;
+  let html = `<table class="activity-table" style="font-size:12px">
+    <thead><tr>
+      <th>Data</th><th>Peso</th><th>Calorie</th><th>TDEE</th><th>QAF</th><th>Bilancio</th>
+    </tr></thead><tbody>`;
+  days.forEach(d => {
+    const bal = d.balance;
+    const balColor = bal < 0 ? 'var(--accent2)' : 'var(--accent3)';
+    html += `<tr>
+      <td style="color:var(--accent)">${formatDateShort(d.date)}</td>
+      <td>${d.weight} kg</td>
+      <td>${d.calories} kcal</td>
+      <td style="color:var(--accent2)">${d.tdee} kcal</td>
+      <td style="color:var(--accent4)">${d.qaf.toFixed(2)}</td>
+      <td style="color:${balColor};font-family:'Syne',sans-serif;font-weight:700">${bal >= 0 ? '+' : ''}${Math.round(bal)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('statsDailyTable').innerHTML = html;
+}
+
+function destroyCharts() {
+  Object.values(statsCharts).forEach(c => { try { c.destroy(); } catch {} });
+  statsCharts = {};
+}
+
+// ============================================================
+// HISTORY
+// ============================================================
+function renderHistory() {
+  const allDays = getAllDays().reverse();
+  document.getElementById('historyCount').textContent = `${allDays.length} giorni registrati`;
+
+  if (allDays.length === 0) {
+    document.getElementById('historyList').innerHTML = `<div class="empty-state"><div class="emoji">📋</div><h3>Nessun dato</h3><p>Inizia ad inserire le tue giornate</p></div>`;
+    return;
+  }
+
+  let html = '';
+  allDays.forEach(d => {
+    const bal = d.balance;
+    const balTag = bal < -100 ? `<span class="tag tag-green">-${Math.abs(Math.round(bal))} kcal deficit</span>` : bal > 100 ? `<span class="tag tag-red">+${Math.round(bal)} kcal surplus</span>` : `<span class="tag tag-blue">~neutro</span>`;
+    html += `<div class="history-item" onclick="loadDayIntoInput('${d.date}')">
+      <div class="history-date">${formatDateFull(d.date)}</div>
+      <div class="history-meta">
+        <span><strong style="color:var(--text)">${d.weight} kg</strong></span>
+        <span>${d.calories} kcal assunte</span>
+        <span>TDEE ${d.tdee} kcal</span>
+        <span>QAF ${d.qaf.toFixed(2)}</span>
+      </div>
+      ${balTag}
+    </div>`;
+  });
+
+  document.getElementById('historyList').innerHTML = html;
+}
+
+function loadDayIntoInput(dateStr) {
+  showPage('input');
+  document.getElementById('inputDate').value = dateStr;
+  const d = getDayData(dateStr);
+  if (d) fillInputForm(d);
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function getWeekDays() {
+  const today = new Date();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  return days;
+}
+
+function getWeekDaysData() {
+  return getWeekDays().map(d => getDayData(d)).filter(Boolean).map((d, i) => ({ ...d, date: getWeekDays()[getWeekDays().findIndex(date => getDayData(date) === d || (getDayData(date) && getDayData(date).savedAt === d.savedAt))] }));
+}
+
+function getWeekDaysData() {
+  const days = getWeekDays();
+  return days.map(d => {
+    const data = getDayData(d);
+    return data ? { ...data, date: d } : null;
+  }).filter(Boolean);
+}
+
+function getMonthDaysData() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const allDays = getAllDays();
+  return allDays.filter(d => {
+    const date = new Date(d.date);
+    return date.getFullYear() === year && date.getMonth() === month;
+  });
+}
+
+function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+
+function formatDateShort(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+}
+
+function formatDateFull(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short', year: '2-digit' });
+}
+
+function estimateDate(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+}
+
+function chartOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#8888aa', font: { family: 'DM Mono', size: 10 }, boxWidth: 12 } },
+      tooltip: {
+        backgroundColor: '#1a1a26',
+        borderColor: '#2a2a3f',
+        borderWidth: 1,
+        titleColor: '#f0f0f8',
+        bodyColor: '#8888aa',
+        titleFont: { family: 'Syne', weight: 700 },
+        bodyFont: { family: 'DM Mono', size: 11 }
+      }
+    },
+    scales: {
+      x: { ticks: { color: '#8888aa', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#2a2a3f' } },
+      y: { ticks: { color: '#8888aa', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#2a2a3f' } }
+    }
+  };
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Pre-fill with user's data on first load
+function preloadFirstDay() {
+  const data = loadData();
+  if (Object.keys(data).length === 0) {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('inp_weight').value = '84';
+    document.getElementById('inp_bodyfat').value = '22.2';
+    document.getElementById('inp_muscle').value = '60';
+    document.getElementById('inp_bone').value = '3.2';
+    document.getElementById('inp_water').value = '56';
+    document.getElementById('inp_visceral').value = '9';
+    document.getElementById('inp_measuredBMR').value = '1884';
+    updateLiveCalcs();
+  }
+}
+
+async function manualSync() {
+  showToast('🔄 Sincronizzazione...');
+  const ok = await syncFromSupabase();
+  if (ok) {
+    showToast('✅ Sincronizzato!');
+    if (currentPage === 'dashboard') renderDashboard();
+    if (currentPage === 'stats') renderStats();
+    if (currentPage === 'history') renderHistory();
+  } else {
+    showToast('⚠️ Errore di rete — dati locali OK');
+  }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+async function boot() {
+  init();
+  preloadFirstDay();
+
+  // Check if there's existing local data to migrate (first time with Supabase)
+  const migrated = localStorage.getItem('metabolix_migrated_v1');
+  if (!migrated) {
+    const localCache = loadCache();
+    if (Object.keys(localCache).length > 0) {
+      showToast('📤 Migrazione dati in corso...');
+      await migrateLocalData();
+      localStorage.setItem('metabolix_migrated_v1', '1');
+    } else {
+      localStorage.setItem('metabolix_migrated_v1', '1');
+    }
+  }
+
+  // Full sync on load
+  const synced = await syncFromSupabase();
+  if (synced) {
+    renderDashboard();
+    // Auto-prefill if on input page
+    const today = new Date().toISOString().split('T')[0];
+    const existing = getDayData(today);
+    if (existing && document.getElementById('inp_weight').value === '') {
+      fillInputForm(existing);
+    }
+  }
+
+  // Re-sync every 2 minutes (for multi-device freshness)
+  setInterval(async () => {
+    await syncFromSupabase();
+    if (currentPage === 'dashboard') renderDashboard();
+    if (currentPage === 'stats') renderStats();
+    if (currentPage === 'history') renderHistory();
+  }, 120000);
+}
+
+boot();
+</script>
+</body>
+</html>
